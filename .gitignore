@@ -3,3 +3,6 @@ desktop.cvt
 build
 *.CVT
 *.cvt
+GEOS65.D81
+/tools/local/
+/tools/env.sh

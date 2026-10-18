@@ -36,6 +36,21 @@ Learn more details about the GEOS MEGA65 implementation (soon) in the [Technical
 
 We are on https://bluewaysw.slack.com/ for more efficient collaboration. Please register at https://blog.bluewaysw.de for MyGEOS and use the Slack section and receive access to our developer community. Welcome!
 
+### Quick kernal development build
+
+To iterate on the kernal without VICE and without downloading the original
+GEOS files, put a working MEGA65 GEOS disk image (e.g. the released
+`GEOS65.D81`) into the repository root and run:
+
+    sh tools/setup-toolchain.sh        # once: cc65, pinned grc65, Exomizer 2, pucrunch
+    . tools/env.sh
+    make d81-update C1541="python3 tools/mkdisk.py"
+
+This creates `build/mega65/geos65-dev.d81`: a copy of `GEOS65.D81` where only
+`AUTOBOOT.C65` (the kernal incl. disk and input driver) is replaced by the new
+build. Mount it on the MEGA65 and boot (or `DLOAD "AUTOBOOT.C65"` + `RUN`).
+Use `M65_BASE=<file>` to pick a different base image.
+
 
 ## Description
 

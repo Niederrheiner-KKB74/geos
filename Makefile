@@ -19,6 +19,10 @@ D81_TEMPLATE = GEOS64.D81
 D81_RESULT   = geos.d81
 GEOS_OUT     = autoboot.c65
 DESKTOP_CVT  = desktop.cvt
+# Base image for "make d81-update": a working MEGA65 GEOS disk (e.g. the
+# released GEOS65.D81). Only AUTOBOOT.C65 (the kernal) gets replaced.
+M65_BASE     ?= GEOS65.D81
+M65_UPDATED  = geos65-dev.d81
 WEEIP_SRC    = test/mega65-weeip/src
 
 CONFIRM_CBMFILES_PERSONAL_USE_LICENSE	?= NO
@@ -341,6 +345,19 @@ regress:
 
 clean:
 	rm -rf build
+
+# Quick development image: copy $(M65_BASE) and replace only the kernal.
+# Needs no downloads and no geoswrite, works with tools/mkdisk.py:
+#   make d81-update C1541="python3 tools/mkdisk.py"
+d81-update: $(BUILD_DIR)/$(M65_UPDATED)
+
+$(BUILD_DIR)/$(M65_UPDATED): $(BUILD_DIR)/kernal_compressed.prg $(M65_BASE)
+	cp $(M65_BASE) $@
+	echo delete $(GEOS_OUT) | $(C1541) $@ >/dev/null
+	echo write $< $(GEOS_OUT) | $(C1541) $@ >/dev/null
+	@echo \*\*\* Created $@ from $(M65_BASE) with the new kernal.
+
+.PHONY: d81-update
 
 $(BUILD_DIR)/$(D64_RESULT): $(BUILD_DIR)/kernal_compressed.prg
 	@if [ -e $(D64_TEMPLATE) ]; then \
