@@ -376,7 +376,12 @@ $(COLORTEST_BUILD)/header.o: test/colortest/colortest.grc test/colortest/colorte
 $(BUILD_DIR)/colortest.cvt: $(COLORTEST_BUILD)/header.o $(COLORTEST_BUILD)/main.o
 	$(LD) --allow-multiple-definition -t geos-cbm -o $@ $(COLORTEST_BUILD)/header.o -m $(BUILD_DIR)/colortest.map $(COLORTEST_BUILD)/main.o
 
-.PHONY: d81-update
+# Run the real decruncher of AUTOBOOT.C65 from the dev image in a small
+# 6502 emulator and compare the result with the freshly built kernal.
+d81-check: $(BUILD_DIR)/$(M65_UPDATED)
+	python3 -I tools/check-boot-image.py $< $(BUILD_DIR)/kernal_combined.prg $(BUILD_DIR)/kernel.map
+
+.PHONY: d81-update d81-check
 
 $(BUILD_DIR)/$(D64_RESULT): $(BUILD_DIR)/kernal_compressed.prg
 	@if [ -e $(D64_TEMPLATE) ]; then \
@@ -1019,6 +1024,11 @@ TCPSRCS=$(WEEIP_SRC)/arp.c \
 ifeq ($(VARIANT), mega65)
 $(BUILD_DIR)/compressed.bin: $(BUILD_DIR)/kernal_combined.prg
 	$(EXOMIZER) mem $<,0x5000 -o $@
+
+# loader.s embeds the compressed kernal with .INCBIN, so it has to be
+# reassembled whenever the kernal changes (the pattern rule only knows
+# about loader.s).
+$(BUILD_DIR)/loader/loader.o: $(BUILD_DIR)/compressed.bin
 
 $(BUILD_DIR)/compressed_mega65.prg: $(BUILD_DIR)/compressed.bin $(BUILD_DIR)/loader/uncrunch.o $(BUILD_DIR)/loader/loader.o
 	$(LD) -C loader/loader.cfg $(BUILD_DIR)/loader/loader.o -m $(BUILD_DIR)/kernel.map $(BUILD_DIR)/loader/uncrunch.o -o $@

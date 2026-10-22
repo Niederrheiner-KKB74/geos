@@ -20,6 +20,22 @@ CARD_ROW	= BAR_TOP + 16*8 + 8
 .segment "STARTUP"
 
 __STARTUP_RUN__:
+	; Kernals without colour support have BRK in the ColorRectangle and
+	; ColorCard jump table entries. Show a message instead of crashing.
+	lda ColorCard
+	cmp #$4C		; JMP
+	bne @noColor
+	lda ColorRectangle
+	cmp #$4C
+	beq @hasColor
+@noColor:
+	jsr UseSystemFont
+	LoadW r0, txtNoColor
+	LoadW r11, 8
+	LoadB r1H, 10
+	jsr PutString
+	jmp SetExit
+@hasColor:
 	; whole screen: 50% pattern, so foreground and background are visible
 	lda #2
 	jsr SetPattern
@@ -105,6 +121,7 @@ __STARTUP_RUN__:
 	LoadW r0, txtFail
 @print:	jsr PutString
 
+SetExit:
 	; exit on click or key
 	LoadW otherPressVec, ExitPress
 	LoadW keyVector, Exit
@@ -155,6 +172,9 @@ txtTitle:
 txtOK:	.byte "OK  (click or key = exit)", NULL
 txtFail:
 	.byte "FAILED  (click or key = exit)", NULL
+txtNoColor:
+	.byte BOLDON, "This GEOS kernal has no ColorCard/ColorRectangle support.", PLAINTEXT
+	.byte " Boot from geos65-dev.d81 (click or key = exit)", NULL
 
 barNo:	 .byte 0
 errors:	 .byte 0
