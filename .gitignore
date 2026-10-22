@@ -6,3 +6,4 @@ build
 GEOS65.D81
 /tools/local/
 /tools/env.sh
+__pycache__/
