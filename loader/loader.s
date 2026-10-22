@@ -89,6 +89,14 @@ next:	.WORD	0
 	LDA	#C65_VIC_INIT2
 	STA	$D02F
 
+	; Blank the display while we move the screen/charset pointers away
+	; from the BASIC text screen (see $D060/$D068 below) and while the
+	; kernal boots. Otherwise random memory shows up as coloured 8x8
+	; cells. InitVideoMode in the kernal switches the display on again.
+	LDA	$D011
+	AND	#%11101111
+	STA	$D011
+
 	; Various VIC register stuffs
 	STZ	$D030	; turn ROM mappings / etc OFF
 	STZ	$D031
