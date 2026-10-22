@@ -1,0 +1,9 @@
+HEADER APPLICATION "COLORTEST" "ColorTest" "V0.1" {
+    author    "Niederrheiner-KKB74"
+    dostype   USR
+    structure SEQ
+    info      "Test for ColorCard/ColorRectangle (colour per 8x8 card) on the MEGA65."
+    date      26 10 22 21 0
+    mode      80only
+    icon      "build/mega65/test/colortest/colortest.bf"
+}

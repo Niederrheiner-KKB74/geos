@@ -186,6 +186,7 @@ ifeq ($(VARIANT), mega65)
 	KERNAL_SOURCES += \
 	kernal/graph/normalize.s \
 	kernal/graph/mode.s \
+	kernal/graph/color65.s \
 	kernal/640/bswfont80.s \
 	kernal/graph/graph2p.s \
 	kernal/c65/map.s \
@@ -346,16 +347,34 @@ regress:
 clean:
 	rm -rf build
 
-# Quick development image: copy $(M65_BASE) and replace only the kernal.
-# Needs no downloads and no geoswrite, works with tools/mkdisk.py:
+# Quick development image: copy $(M65_BASE), replace the kernal and add the
+# test programs. Needs no downloads, works with tools/mkdisk.py:
 #   make d81-update C1541="python3 tools/mkdisk.py"
 d81-update: $(BUILD_DIR)/$(M65_UPDATED)
 
-$(BUILD_DIR)/$(M65_UPDATED): $(BUILD_DIR)/kernal_compressed.prg $(M65_BASE)
+DEV_TESTS = $(BUILD_DIR)/colortest.cvt
+
+$(BUILD_DIR)/$(M65_UPDATED): $(BUILD_DIR)/kernal_compressed.prg $(DEV_TESTS) $(M65_BASE)
 	cp $(M65_BASE) $@
 	echo delete $(GEOS_OUT) | $(C1541) $@ >/dev/null
 	echo write $< $(GEOS_OUT) | $(C1541) $@ >/dev/null
-	@echo \*\*\* Created $@ from $(M65_BASE) with the new kernal.
+	echo delete colortest | $(C1541) $@ >/dev/null
+	echo geoswrite $(BUILD_DIR)/colortest.cvt | $(C1541) $@ >/dev/null
+	@echo \*\*\* Created $@ from $(M65_BASE) with the new kernal and test programs.
+
+# COLORTEST: test application for ColorCard/ColorRectangle (test/colortest)
+COLORTEST_BUILD = $(BUILD_DIR)/test/colortest
+
+$(COLORTEST_BUILD)/header.o: test/colortest/colortest.grc test/colortest/colortestIcon.s
+	@mkdir -p $(COLORTEST_BUILD)
+	$(AS) test/colortest/colortestIcon.s -o $(COLORTEST_BUILD)/icon.o
+	$(LD) -C test/colortest/colortestIcon.cfg $(COLORTEST_BUILD)/icon.o -o $(COLORTEST_BUILD)/colortest.bf
+	$(GRC) -s $(COLORTEST_BUILD)/header.s2 -o $(COLORTEST_BUILD)/header.c test/colortest/colortest.grc
+	sed 's/192/1/g' $(COLORTEST_BUILD)/header.s2 > $(COLORTEST_BUILD)/header.s
+	$(AS) -D $(VARIANT)=1 $(ASFLAGS) $(COLORTEST_BUILD)/header.s -o $@
+
+$(BUILD_DIR)/colortest.cvt: $(COLORTEST_BUILD)/header.o $(COLORTEST_BUILD)/main.o
+	$(LD) --allow-multiple-definition -t geos-cbm -o $@ $(COLORTEST_BUILD)/header.o -m $(BUILD_DIR)/colortest.map $(COLORTEST_BUILD)/main.o
 
 .PHONY: d81-update
 

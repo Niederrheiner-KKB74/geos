@@ -10,8 +10,8 @@ Makefile pipes them into VICE's c1541:
     echo 'delete geos "geos kernal"' | mkdisk.py geos.d81
 
 Supported image types: .d64 (35 tracks) and .d81.
-Supported commands: format, write, delete, dir.
-Not supported: geoswrite (use VICE's c1541 for that).
+Supported commands: format, write, delete, dir, geoswrite (CVT, SEQ+VLIR).
+Not supported: geosfolder (TopDesk folders; use the bluewaysw c1541).
 
 Use it with:  make C1541="python3 tools/mkdisk.py"
 """
@@ -173,12 +173,17 @@ class Image:
             for i in range(8):
                 yield b, i * 32
 
-    def find(self, name):
-        want = petscii(name, 16)
+    def find_raw(self, want):
         for b, o in self.entries():
             if b[o + 2] & 0x07 and bytes(b[o + 5:o + 21]) == want:
                 return b, o
         return None
+
+    def find(self, name):
+        """Exact (GEOS names are mixed case) or upper-cased PETSCII match."""
+        raw = name.encode("latin-1")[:16]
+        raw += bytes([PETSCII_PAD] * (16 - len(raw)))
+        return self.find_raw(raw) or self.find_raw(petscii(name, 16))
 
     def free_entry(self):
         for b, o in self.entries():
@@ -197,11 +202,8 @@ class Image:
         raise SystemExit("mkdisk: directory full")
 
     # --- files ------------------------------------------------------------
-    def write(self, src, name, ftype=0x82):
-        with open(src, "rb") as f:
-            payload = f.read()
-        if self.find(name):
-            raise SystemExit(f"mkdisk: file '{name}' already exists")
+    def write_chain(self, payload):
+        """Write payload as a sector chain, return (first (t, s), blocks)."""
         chunks = [payload[i:i + 254] for i in range(0, len(payload), 254)] or [b""]
         blocks = [self.alloc() for _ in chunks]
         for i, (chunk, (t, s)) in enumerate(zip(chunks, blocks)):
@@ -212,12 +214,72 @@ class Image:
             else:
                 b[0:2] = bytes([0, len(chunk) + 1])
             b[2:2 + len(chunk)] = chunk
+        return blocks[0], len(blocks)
+
+    def write(self, src, name, ftype=0x82):
+        with open(src, "rb") as f:
+            payload = f.read()
+        if self.find(name):
+            raise SystemExit(f"mkdisk: file '{name}' already exists")
+        first, count = self.write_chain(payload)
         b, o = self.free_entry()
         b[o + 2:o + 32] = bytes(30)
         b[o + 2] = ftype
-        b[o + 3:o + 5] = bytes(blocks[0])
+        b[o + 3:o + 5] = bytes(first)
         b[o + 5:o + 21] = petscii(name, 16)
-        b[o + 30:o + 32] = len(blocks).to_bytes(2, "little")
+        b[o + 30:o + 32] = count.to_bytes(2, "little")
+
+    def geoswrite(self, src):
+        """Write a GEOS file from a Convert (CVT) file, SEQ or VLIR."""
+        with open(src, "rb") as f:
+            cvt = f.read()
+        if b"formatted GEOS file" not in cvt[30:62]:
+            raise SystemExit(f"mkdisk: {src} is not a CVT file")
+        entry = bytearray(cvt[0:30])      # = directory entry bytes 2..31
+        name = bytes(entry[3:19])
+        if self.find_raw(name):
+            raise SystemExit(f"mkdisk: file '{name.rstrip(bytes([PETSCII_PAD])).decode('latin-1')}' already exists")
+        info = cvt[254:508]
+        total = 0
+        if entry[21] == 0:                # SEQ
+            first, total = self.write_chain(cvt[508:])
+        else:                             # VLIR: record table, then records
+            table = cvt[508:762]
+            pos = 762
+            index = bytearray(256)
+            index[0:2] = bytes([0, 0xFF])
+            for r in range(127):
+                nblk, last = table[2 * r], table[2 * r + 1]
+                if nblk == 0:
+                    index[2 + 2 * r:4 + 2 * r] = bytes([0, last])
+                    continue
+                length = (nblk - 1) * 254 + (last - 1)
+                (t, s), cnt = self.write_chain(cvt[pos:pos + length])
+                pos += nblk * 254
+                total += cnt
+                index[2 + 2 * r:4 + 2 * r] = bytes([t, s])
+            first = self.alloc()
+            self.sector(*first)[:] = index
+            total += 1
+        info_ts = self.alloc()
+        ib = self.sector(*info_ts)
+        ib[:] = bytes(256)
+        ib[0:2] = bytes([0, 0xFF])
+        ib[2:2 + len(info)] = info
+        total += 1
+        entry[1:3] = bytes(first)
+        entry[19:21] = bytes(info_ts)
+        entry[28:30] = total.to_bytes(2, "little")
+        b, o = self.free_entry()
+        b[o + 2:o + 32] = entry
+
+    def free_chain(self, t, s):
+        seen = set()
+        while t and (t, s) not in seen:
+            seen.add((t, s))
+            self.set_used(t, s, False)
+            nxt = self.sector(t, s)
+            t, s = nxt[0], nxt[1]
 
     def delete(self, name):
         hit = self.find(name)
@@ -225,12 +287,17 @@ class Image:
             return False
         b, o = hit
         t, s = b[o + 3], b[o + 4]
-        seen = set()
-        while t and (t, s) not in seen:
-            seen.add((t, s))
+        if b[o + 24] and b[o + 23] == 1 and t:    # GEOS VLIR: free records
+            index = bytes(self.sector(t, s))
+            for r in range(127):
+                rt, rs = index[2 + 2 * r], index[3 + 2 * r]
+                if rt:
+                    self.free_chain(rt, rs)
             self.set_used(t, s, False)
-            nxt = self.sector(t, s)
-            t, s = nxt[0], nxt[1]
+        else:
+            self.free_chain(t, s)
+        if b[o + 24] and b[o + 21]:               # GEOS info block
+            self.set_used(b[o + 21], b[o + 22], False)
         b[o + 2] = 0
         return True
 
@@ -269,6 +336,9 @@ def main():
             if image is None:
                 raise SystemExit("mkdisk: no image attached")
             image.write(rest[0], rest[1] if len(rest) > 1 else os.path.basename(rest[0]))
+        elif cmd == "geoswrite":
+            for src in rest:
+                image.geoswrite(src)
         elif cmd == "delete":
             for n in rest:
                 image.delete(n)

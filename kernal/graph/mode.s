@@ -34,6 +34,8 @@
 .import VIC_IniTbl_end
 .import SetVICRegs
 .import _MapLow
+.import colorBase
+.import ResetColors65
 .endif
 
 ;.import screenMaxX
@@ -237,12 +239,17 @@ InitVideoMode:
 	; palette.
 	LDA 	vmiColorRAMOffset, y
 	STA 	$D060
+	sta	colorBase	; for ColorCard/ColorRectangle
 	LDA 	vmiColorRAMOffset+1 , y
 	STA 	$D061
+	sta	colorBase+1
 	LDA 	vmiColorRAMBank,y
 	STA 	$D062
+	sta	colorBase+2
 	LDA 	vmiColorRAMBank+1,y
 	STA 	$D063
+	and	#$0F
+	sta	colorBase+3
 
 	; Set bitmap data to somewhere that has 100x60 x 8 = 48,000 bytes of RAM.
 	; (We are using 2nd bank of 64KB for this)
@@ -334,12 +341,14 @@ InitVideoMode:
 	.word	16
 	
 	jsr	i_MoveData
-@rowSrc:	
+@rowSrc:
 	.word	0
 	.word	RowTab
 	.word	16
 
-	rts
+	; The colour RAM layout depends on the mode (row length), so start
+	; every mode with uniform screencolors.
+	jmp	ResetColors65
 
 ;
 ;       Video Modes init table

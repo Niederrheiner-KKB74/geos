@@ -203,6 +203,8 @@
 .import _map__CRC
 .import _map_SetNewMode
 .import _map_GetRealSize
+.import _map_ColorCard
+.import _map_ColorRectangle
 .import _map_IsMseInRegion
 .import _map_SetMsePic
 .else
@@ -1032,11 +1034,12 @@ AccessCache:
 HideOnlyMouse:
 	UNIMPLEMENTED_NO_ACTION
 SetColorMode:
-	UNIMPLEMENTED
+	; colour cards are always 8x8 on the MEGA65, nothing to switch
+	UNIMPLEMENTED_NO_ACTION
 ColorCard:
-	UNIMPLEMENTED
+	jmp _map_ColorCard
 ColorRectangle:
-	UNIMPLEMENTED
+	jmp _map_ColorRectangle
 NormalizeY:		 ;$C2FE
 	jmp _NormalizeY
 

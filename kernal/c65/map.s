@@ -69,6 +69,8 @@
 .import __CRC
 .import _SetNewMode
 .import _GetRealSize
+.import _ColorCard
+.import _ColorRectangle
 .import _EndScanLine
 .import _IsMseInRegion
 .import _ProcessMouseInt
@@ -104,6 +106,8 @@
 .global _map__CRC
 .global _map_SetNewMode
 .global _map_GetRealSize
+.global _map_ColorCard
+.global _map_ColorRectangle
 .global _map_IsMseInRegion
 .global _map_SetMsePic
 
@@ -365,6 +369,21 @@ _map_GetRealSize:
 _map_SetMsePic:
     jsr MapUnderlay
     jsr _SetMsePic
+    bra __unmap
+; MapUnderlay/UnmapUnderlay keep a, x, y, z but not the carry,
+; which is the read/write flag of ColorCard
+_map_ColorCard:
+    php
+    jsr MapUnderlay
+    plp
+    jsr _ColorCard
+    php
+    jsr UnmapUnderlay
+    plp
+    rts
+_map_ColorRectangle:
+    jsr MapUnderlay
+    jsr _ColorRectangle
     bra __unmap
 	
 MapUnderlay:
