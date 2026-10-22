@@ -83,10 +83,33 @@ ASSERT_NOT_BELOW_IO
 	lda cia1base+13
 	lda cia2base+13
 .endif
+.ifdef mega65
+	; DoFirstInitIO also runs while GEOS is up (before every auto-exec
+	; at boot, InitMachine on EnterDeskTop). VIC_IniTbl switches the
+	; display off and sets $D016 to $08; mid-frame that showed up as
+	; flickering lines until SetNewMode reprogrammed the VIC. So keep
+	; $D011/$D016 if the display is already on - only the first call at
+	; boot (display blanked by the loader) leaves it off.
+	lda grcntrl1
+	pha
+	lda grcntrl2
+	pha
+.endif
 	LoadW r0, VIC_IniTbl
 .assert * - VIC_IniTbl_end - VIC_IniTbl < 256, error, "VIC_IniTbl must be < 256 bytes"
 	ldy #<(VIC_IniTbl_end - VIC_IniTbl)
 	jsr SetVICRegs
+.ifdef mega65
+	pla
+	tax			; old $D016
+	pla			; old $D011
+	and #%01111111		; bit 7 reads the raster MSB, compare MSB stays 0
+	bit #%00010000
+	beq @keepOff		; display was off: first call at boot
+	sta grcntrl1
+	stx grcntrl2
+@keepOff:
+.endif
 .ifdef bsw128
 	jsr InitVDC
 	lda #0 ; monochrome mode

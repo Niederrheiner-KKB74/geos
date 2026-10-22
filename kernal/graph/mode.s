@@ -170,6 +170,13 @@ SetRightMargin:
 .ifdef mega65
 
 InitVideoMode:
+	; Reprogramming the VIC-IV mid-frame shows a few lines with half
+	; updated pointers/modes. Do the register part at the start of a
+	; frame, with interrupts off (takes far less than one raster line
+	; at 40 MHz). The matching plp is after the last VIC register write.
+	php
+	sei
+	jsr	WaitFrameStart
 	pha
 
 	jsr	MapUnderlay
@@ -328,6 +335,8 @@ InitVideoMode:
 				LDA   	vmiFullCardsY, X
 				sta     $d07b
 
+	plp			; VIC registers done (see InitVideoMode)
+
 	lda	vmiScanLineLen, y
 	sta 	r5L
 	lda	vmiScanLineLen+1, y
@@ -354,7 +363,21 @@ InitVideoMode:
 ;       Video Modes init table
 ;
 
-;       
+;---------------------------------------------------------------
+; WaitFrameStart: wait for VIC-II compatible raster line 0
+; (physical lines 0-1, above the visible area of every mode).
+; Needs I/O mapped in. Preserves a, x, y.
+;---------------------------------------------------------------
+WaitFrameStart:
+	pha
+@1:	lda	rasreg
+	bne	@1		; low byte 0: line 0 or 256
+	bit	grcntrl1
+	bmi	@1		; raster bit 8 set: line 256
+	pla
+	rts
+
+;
 ;		320x200x2	640x200x2	640x400x2	720xYx2(dyn)
 ;		(320x200x256)	(640x200x16)	(640x400x4)
 vmiScanLineLen:  
