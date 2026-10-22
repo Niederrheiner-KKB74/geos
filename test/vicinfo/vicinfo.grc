@@ -1,0 +1,9 @@
+HEADER APPLICATION "VICINFO" "VicInfo" "V0.1" {
+    author    "Niederrheiner-KKB74"
+    dostype   USR
+    structure SEQ
+    info      "Diagnostics: shows VIC-IV pointers and card colours (kernal view vs. VIC)."
+    date      26 10 22 22 0
+    mode      80only
+    icon      "build/mega65/test/vicinfo/vicinfo.bf"
+}

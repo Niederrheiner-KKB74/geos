@@ -108,7 +108,12 @@ next:	.WORD	0
 	LDA	#$04
 	sta	$D710
 	lda	$D05D
-	and	#%10111111
+	; bit 6: raster delay off; bit 7: VIC-II "hot registers" off.
+	; With hot registers on, every write to $D011/$D016/$D018/$D031
+	; (e.g. VIC_IniTbl in DoFirstInitIO) recalculates the VIC-IV screen
+	; and charset pointers from the VIC-II registers and throws away the
+	; pointers set below. InitVideoMode switches them on only briefly.
+	and	#%00111111
 	;ora	#%01000000
 	sta	$D05D
 
@@ -122,59 +127,40 @@ next:	.WORD	0
 	;lda	#5
 	;sta	$D61B
 
-	 ; Set screen ram that has 100x60 cells x 2 bytes per cell = 12,000 bytes of colour
-	 ; information for bitmap mode.
-	 ; First byte is foreground colour (8-bit) and second byte is background colour (also 8-bit),
-	 ; so each 8x8 cell can still have only 2 colours, but they can be chosen from the whole
-	 ; palette.
-	 LDA #<$2000
-	 STA $D060
-	 LDA #>$2000
-	 STA $D061
-	 LDA #<1
-	 STA $D062
-	 LDA #>1
-	 STA $D063
-	 ; Set bitmap data to somewhere that has 100x60 x 8 = 48,000 bytes of RAM.
-	 ; (We are using 2nd bank of 64KB for this)
-	 ; NOTE: This can't actually be set freely (yet), but will be on 16KB boundaries.
-	 LDA #<$4000
-	 STA $D068
-	 LDA #>$4000
-	 STA $D069
-	 LDA #1
-	 STA $D06A
+	; Prepare what the VIC shows until the kernal has set up the GEOS
+	; video mode (InitVideoMode): clear the GEOS bitmap in bank 4
+	; ($40000-$4DFFF) and fill the card colour RAM ($4E000-$4FFFF) with
+	; DKGREY on LTGREY by DMA, then point the VIC-IV screen and charset/
+	; bitmap pointers there. The old pointers ($12000/$14000) showed
+	; random memory as coloured 8x8 cells during boot; switching the
+	; display off with $D011 alone did not hide that on the MEGA65.
+	LDA	#0
+	STA	$D702		; DMA list in bank 0
+	STA	$D704		; ... MB 0
+	LDA	#>dmaClearBitmap
+	STA	$D701
+	LDA	#<dmaClearBitmap
+	STA	$D705		; start enhanced DMA job
+	LDA	#>dmaFillColour
+	STA	$D701
+	LDA	#<dmaFillColour
+	STA	$D705
 
-	 ; Setup foreground/background colours
-.if 1
-	 LDA #<$e000
-	 STA $FB
-	 LDA #>$e000
-	 STA $FC
-	 LDA #<4
-	 STA $FD
-	 LDA #>4
-	 STA $FE
+	LDA	#<$E000		; screen pointer (card colours): $4E000
+	STA	$D060
+	LDA	#>$E000
+	STA	$D061
+	LDA	#4
+	STA	$D062
+	LDA	#0
+	STA	$D063
+	LDA	#<$0000		; charset/bitmap pointer: $40000
+	STA	$D068
+	LDA	#>$0000
+	STA	$D069
+	LDA	#4
+	STA	$D06A
 
-	 LDX #100
-	 LDZ #$00
-	 LDA #(DKGREY << 4)+LTGREY
-colloop:
-
-	 NOP
-	 STA ($FB),Z
-	 INZ
-	 DEX
-	 BNE cc1
-	 LDX #100
-cc1:
-	 CPZ #$00
-	 bne colloop
-	 inc $fc
-	 ldy $fc
-	 cpy #$00
-	 bne colloop
-.endif
 	LDA	#$30	; full RAM for uncrunching
 	STA	1
 	.IMPORT	uncruncher
@@ -183,6 +169,30 @@ cc1:
 	;STZ	53281
 
 	JMP	$5000
+
+; F018A DMA jobs (enhanced option list, then 11 byte job)
+dmaClearBitmap:
+	.BYTE	$0A		; F018A list format
+	.BYTE	$81, $00	; destination MB 0
+	.BYTE	$00		; end of options
+	.BYTE	$03		; fill
+	.WORD	$E000		; count
+	.WORD	$0000		; fill value (low byte)
+	.BYTE	$00
+	.WORD	$0000		; destination
+	.BYTE	$04		; destination bank 4
+	.WORD	$0000		; modulo
+dmaFillColour:
+	.BYTE	$0A
+	.BYTE	$81, $00
+	.BYTE	$00
+	.BYTE	$03		; fill
+	.WORD	$2000		; count
+	.WORD	(DKGREY << 4) + LTGREY
+	.BYTE	$00
+	.WORD	$E000		; destination
+	.BYTE	$04		; destination bank 4
+	.WORD	$0000
 
 ;	========================
 .ENDPROC

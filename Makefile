@@ -352,29 +352,32 @@ clean:
 #   make d81-update C1541="python3 tools/mkdisk.py"
 d81-update: $(BUILD_DIR)/$(M65_UPDATED)
 
-DEV_TESTS = $(BUILD_DIR)/colortest.cvt
+DEV_TESTS = colortest vicinfo
 
-$(BUILD_DIR)/$(M65_UPDATED): $(BUILD_DIR)/kernal_compressed.prg $(DEV_TESTS) $(M65_BASE)
+$(BUILD_DIR)/$(M65_UPDATED): $(BUILD_DIR)/kernal_compressed.prg $(DEV_TESTS:%=$(BUILD_DIR)/%.cvt) $(M65_BASE)
 	cp $(M65_BASE) $@
 	echo delete $(GEOS_OUT) | $(C1541) $@ >/dev/null
 	echo write $< $(GEOS_OUT) | $(C1541) $@ >/dev/null
-	echo delete colortest | $(C1541) $@ >/dev/null
-	echo geoswrite $(BUILD_DIR)/colortest.cvt | $(C1541) $@ >/dev/null
+	for t in $(DEV_TESTS); do \
+		echo delete $$t | $(C1541) $@ >/dev/null; \
+		echo geoswrite $(BUILD_DIR)/$$t.cvt | $(C1541) $@ >/dev/null; \
+	done
 	@echo \*\*\* Created $@ from $(M65_BASE) with the new kernal and test programs.
 
-# COLORTEST: test application for ColorCard/ColorRectangle (test/colortest)
-COLORTEST_BUILD = $(BUILD_DIR)/test/colortest
+# Test programs in test/<name>/: <name>.grc, <name>Icon.s/.cfg, main.s
+define DEV_TEST_RULES
+$(BUILD_DIR)/test/$(1)/header.o: test/$(1)/$(1).grc test/$(1)/$(1)Icon.s
+	@mkdir -p $(BUILD_DIR)/test/$(1)
+	$(AS) test/$(1)/$(1)Icon.s -o $(BUILD_DIR)/test/$(1)/icon.o
+	$(LD) -C test/$(1)/$(1)Icon.cfg $(BUILD_DIR)/test/$(1)/icon.o -o $(BUILD_DIR)/test/$(1)/$(1).bf
+	$(GRC) -s $(BUILD_DIR)/test/$(1)/header.s2 -o $(BUILD_DIR)/test/$(1)/header.c test/$(1)/$(1).grc
+	sed 's/192/1/g' $(BUILD_DIR)/test/$(1)/header.s2 > $(BUILD_DIR)/test/$(1)/header.s
+	$(AS) -D $(VARIANT)=1 $(ASFLAGS) $(BUILD_DIR)/test/$(1)/header.s -o $$@
 
-$(COLORTEST_BUILD)/header.o: test/colortest/colortest.grc test/colortest/colortestIcon.s
-	@mkdir -p $(COLORTEST_BUILD)
-	$(AS) test/colortest/colortestIcon.s -o $(COLORTEST_BUILD)/icon.o
-	$(LD) -C test/colortest/colortestIcon.cfg $(COLORTEST_BUILD)/icon.o -o $(COLORTEST_BUILD)/colortest.bf
-	$(GRC) -s $(COLORTEST_BUILD)/header.s2 -o $(COLORTEST_BUILD)/header.c test/colortest/colortest.grc
-	sed 's/192/1/g' $(COLORTEST_BUILD)/header.s2 > $(COLORTEST_BUILD)/header.s
-	$(AS) -D $(VARIANT)=1 $(ASFLAGS) $(COLORTEST_BUILD)/header.s -o $@
-
-$(BUILD_DIR)/colortest.cvt: $(COLORTEST_BUILD)/header.o $(COLORTEST_BUILD)/main.o
-	$(LD) --allow-multiple-definition -t geos-cbm -o $@ $(COLORTEST_BUILD)/header.o -m $(BUILD_DIR)/colortest.map $(COLORTEST_BUILD)/main.o
+$(BUILD_DIR)/$(1).cvt: $(BUILD_DIR)/test/$(1)/header.o $(BUILD_DIR)/test/$(1)/main.o
+	$(LD) --allow-multiple-definition -t geos-cbm -o $$@ $(BUILD_DIR)/test/$(1)/header.o -m $(BUILD_DIR)/$(1).map $(BUILD_DIR)/test/$(1)/main.o
+endef
+$(foreach t,$(DEV_TESTS),$(eval $(call DEV_TEST_RULES,$(t))))
 
 # Run the real decruncher of AUTOBOOT.C65 from the dev image in a small
 # 6502 emulator and compare the result with the freshly built kernal.
