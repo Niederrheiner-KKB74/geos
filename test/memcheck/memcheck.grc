@@ -1,0 +1,9 @@
+HEADER APPLICATION "MEMCHECK" "MemCheck" "V0.1" {
+    author    "Niederrheiner-KKB74"
+    dostype   USR
+    structure SEQ
+    info      "Hardware check for the task switcher: attic RAM, ROM area, colour RAM mirror."
+    date      26 10 23 10 0
+    mode      80only
+    icon      "build/mega65/test/memcheck/memcheck.bf"
+}

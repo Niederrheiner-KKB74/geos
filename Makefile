@@ -352,7 +352,7 @@ clean:
 #   make d81-update C1541="python3 tools/mkdisk.py"
 d81-update: $(BUILD_DIR)/$(M65_UPDATED)
 
-DEV_TESTS = colortest vicinfo
+DEV_TESTS = colortest vicinfo memcheck
 
 $(BUILD_DIR)/$(M65_UPDATED): $(BUILD_DIR)/kernal_compressed.prg $(DEV_TESTS:%=$(BUILD_DIR)/%.cvt) $(M65_BASE)
 	cp $(M65_BASE) $@
